@@ -1,4 +1,4 @@
-# Enterprise LLM Developer Portal
+# Task Assignment for frontend intern
 
 A high-performance React frontend built for enterprise developers to test on-device inference, experiment with live streaming models, and perform deep token-level diff analysis on LLM outputs. 
 
