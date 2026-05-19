@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { useGeminiStream } from "../hooks/useGeminiStream";
 
 
 type InputMode = "text" | "voice";
@@ -7,18 +8,15 @@ type InputMode = "text" | "voice";
 const Playground: React.FC = () => {
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<InputMode>("text");
-  const [output, setOutput] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [metrics, setMetrics] = useState({ tokens: 0, tps: 0 });
+  const { output, error, isLoading, metrics, runStream, setError } = useGeminiStream();
   const [isRecording, setIsRecording] = useState(false);
   const [, setInterimTranscript] = useState("");
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const speechSupported =
     typeof window !== "undefined" &&
     !!(
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition
     );
 
   useEffect(() => {
@@ -35,8 +33,8 @@ const Playground: React.FC = () => {
     }
 
     const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError("Voice input is not available.");
       return;
@@ -53,9 +51,9 @@ const Playground: React.FC = () => {
       setError("");
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = Array.from(event.results)
-        .map((result: any) => result[0].transcript)
+        .map((result) => result[0].transcript)
         .join("");
 
       if (event.results[0].isFinal) {
@@ -66,16 +64,19 @@ const Playground: React.FC = () => {
       }
     };
 
-    recognition.onerror = (event: any) => {
-      const message = event.error
-        ? `Voice recognition error: ${event.error}`
-        : "Voice recognition failed.";
-      setError(message);
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      if (event.error === 'no-speech') {
+        setError("Microphone timed out (no speech detected).");
+      } else {
+        setError(event.error ? `Voice recognition error: ${event.error}` : "Voice recognition failed.");
+      }
       setIsRecording(false);
+      setMode("text");
     };
 
     recognition.onend = () => {
       setIsRecording(false);
+      setMode("text");
     };
 
     recognitionRef.current = recognition;
@@ -99,90 +100,18 @@ const Playground: React.FC = () => {
       setIsRecording(false);
     }
 
-    setIsLoading(true);
-    setOutput("");
-    setMetrics({ tokens: 0, tps: 0 });
-
-    try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("Missing Gemini API Key. Please add VITE_GEMINI_API_KEY to your .env file.");
-      }
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:streamGenerateContent?alt=sse&key=${apiKey}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: trimmedPrompt }] }]
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`HTTP error! status: ${response.status} - ${errorData}`);
-      }
-      if (!response.body) throw new Error("No response body");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let done = false;
-      let tokenCount = 0;
-      let currentOutput = "";
-      let buffer = "";
-      const startTime = performance.now();
-
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        
-        if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const dataStr = line.replace("data: ", "").trim();
-              if (!dataStr) continue;
-              
-              try {
-                const parsed = JSON.parse(dataStr);
-                const textChunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                
-                if (textChunk) {
-                  currentOutput += textChunk;
-                  setOutput(currentOutput);
-                  
-                  // For this assignment, we increment the token counter per text chunk received
-                  tokenCount++;
-                  const elapsedSeconds = (performance.now() - startTime) / 1000;
-                  setMetrics({
-                    tokens: tokenCount,
-                    tps: elapsedSeconds > 0 ? Math.round((tokenCount / elapsedSeconds) * 10) / 10 : 0,
-                  });
-                }
-              } catch (e) {
-                console.error("Error parsing chunk JSON", e, dataStr);
-              }
-            }
-          }
-        }
-      }
-    } catch (err: any) {
-      setError("Stream interrupted: " + (err.message || err));
-    } finally {
-      setIsLoading(false);
-    }
+    await runStream(trimmedPrompt);
   };
 
   return (
     <div className="panel playground-panel">
       <div className="panel-header">
-        <div>
-          <h1>Playground</h1>
-          <p>Use text or voice input to generate a response.</p>
+        <div className="header-title">
+          <img src="/icons8-cube-48.png" alt="Playground icon" className="header-icon" />
+          <div>
+            <h1>Playground</h1>
+            <p>Use text or voice input to generate a response.</p>
+          </div>
         </div>
       </div>
     <div className="prompt-box">
@@ -191,8 +120,16 @@ const Playground: React.FC = () => {
         className="prompt-textarea"
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (!isLoading && prompt.trim() !== "") {
+              handleRun();
+            }
+          }
+        }}
         placeholder={mode === "voice" ? "I am Listening..." : "Type here..."}
-        rows={8}
+        rows={4}
       />
         <div className="prompt-footer">
         <div className="mode-switch" role="group" aria-label="Input mode selector">

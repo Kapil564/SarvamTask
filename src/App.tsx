@@ -3,6 +3,7 @@ import './App.css'
 import Navbar from './component/Navbar'
 import Playground from './component/Playground'
 import ModelDiff from './component/ModelDiff'
+import ErrorBoundary from './component/ErrorBoundary'
 
 type ToggleOption = 'playground' | 'model-diff'
 
@@ -14,7 +15,9 @@ function App() {
       <Navbar active={active} onToggle={setActive} />
 
       <main className="main-panel">
-        {active === 'playground' ? <Playground /> : <ModelDiff />}
+        <ErrorBoundary key={active}>
+          {active === 'playground' ? <Playground /> : <ModelDiff />}
+        </ErrorBoundary>
       </main>
     </div>
   )

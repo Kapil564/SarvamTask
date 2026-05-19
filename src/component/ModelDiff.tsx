@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { computeTokenDiff, type DiffToken } from '../lib/diff'
+import ReactMarkdown from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
 import {
   Select,
   SelectContent,
@@ -74,9 +76,12 @@ const ModelDiff: React.FC = () => {
   return (
     <div className="panel model-diff-panel">
       <div className="panel-header">
-        <div>
-          <h1>Model Diff</h1>
-          <p>Compare two model inputs and run a text-only prompt for the diff output.</p>
+        <div className="header-title">
+          <img src="/search.png" alt="Diff icon" className="header-icon" />
+          <div>
+            <h1>Model Diff</h1>
+            <p>Compare two model inputs and run a text-only prompt for the diff output.</p>
+          </div>
         </div>
       </div>
 
@@ -86,6 +91,14 @@ const ModelDiff: React.FC = () => {
           className="prompt-card-textarea"
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (!isLoading && prompt.trim() !== "") {
+                handleRun();
+              }
+            }
+          }}
           placeholder="Type your prompt..."
           rows={5}
         />
@@ -152,12 +165,14 @@ const ModelDiff: React.FC = () => {
             {isLoading && <p className="placeholder">Generating output for {leftModel}…</p>}
             {!isLoading && !diffTokens && <p className="placeholder">Output will appear here after Run.</p>}
             {!isLoading && diffTokens && (
-              <div className="diff-content" aria-live="polite">
-                {diffTokens.map((token, i) => {
-                  if (token.type === 'equal') return <span key={i} className="diff-equal">{token.value}</span>
-                  if (token.type === 'delete') return <span key={i} className="diff-delete">{token.value}</span>
-                  return null
-                })}
+              <div className="diff-content markdown-body" aria-live="polite">
+                <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                  {diffTokens.map(token => {
+                    if (token.type === 'equal') return token.value;
+                    if (token.type === 'delete') return `<span class="diff-delete">${token.value}</span>`;
+                    return '';
+                  }).join('')}
+                </ReactMarkdown>
               </div>
             )}
           </div>
@@ -171,12 +186,14 @@ const ModelDiff: React.FC = () => {
             {isLoading && <p className="placeholder">Generating output for {rightModel}…</p>}
             {!isLoading && !diffTokens && <p className="placeholder">Output will appear here after Run.</p>}
             {!isLoading && diffTokens && (
-              <div className="diff-content" aria-live="polite">
-                {diffTokens.map((token, i) => {
-                  if (token.type === 'equal') return <span key={i} className="diff-equal">{token.value}</span>
-                  if (token.type === 'insert') return <span key={i} className="diff-insert">{token.value}</span>
-                  return null
-                })}
+              <div className="diff-content markdown-body" aria-live="polite">
+                <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                  {diffTokens.map(token => {
+                    if (token.type === 'equal') return token.value;
+                    if (token.type === 'insert') return `<span class="diff-insert">${token.value}</span>`;
+                    return '';
+                  }).join('')}
+                </ReactMarkdown>
               </div>
             )}
           </div>

@@ -50,6 +50,18 @@
   flex-wrap: wrap;
 }
 
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
 .panel-header h1,
 .panel-header h2 {
   margin: 0;
@@ -121,10 +133,9 @@
   padding: 16px 18px;
   border: none;
   font-size: 1rem;
-  line-height: 1.06;
+  line-height: 1.5;
   font-family: inherit;
   resize: none;
-  font-style: italic;
 }
 
 .prompt-textarea:focus {
@@ -309,7 +320,7 @@
   color: #0f172a;
   padding: 16px 18px;
   font-size: 1rem;
-  line-height: 1.0;
+  line-height: 1.5;
   font-family: inherit;
   resize: none;
   outline: none;
